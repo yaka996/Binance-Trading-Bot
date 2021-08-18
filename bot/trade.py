@@ -1,4 +1,3 @@
-from bot.report import report
 import os
 # use if needed to pass args to external modules
 import sys
@@ -31,7 +30,7 @@ from helpers.handle_creds import (
 
 from bot.settings import *
 from bot.grab import *
-from bot.report import *
+
 
 def trailing_buy(volatile_coins: Dict[str, float]) -> Dict[str, float]:
 
@@ -135,39 +134,38 @@ def convert_volume() -> Tuple[Dict, Dict]:
 
     for coin in buy_volatile_coins:
 
-        if session_struct['trade_slots'] + len(volume) < TRADE_SLOTS or TRADE_SLOTS == 0:
+        if session_struct['trade_slots'] + len(volatile_coins) < TRADE_SLOTS or TRADE_SLOTS == 0:
+
+           # Find the correct step size for each coin
+           # max accuracy for BTC for example is 6 decimal points
+           # while XRP is only 1
+           try:
+               step_size = session_struct['symbol_info'][coin]
+               lot_size[coin] = step_size.index('1') - 1
+           except KeyError:
+               # not retrieved at startup, try again
+               try:
+                   coin_info = client.get_symbol_info(coin)
+                   step_size = coin_info['filters'][2]['stepSize']
+                   lot_size[coin] = step_size.index('1') - 1
+               except:
+                   pass
+           lot_size[coin] = max(lot_size[coin], 0)
 
            # calculate the volume in coin from QUANTITY in USDT (default)
-           volume[coin] = coin_volume_precision(coin,float(QUANTITY / float(last_price[coin]['price'])))
+           volume[coin] = float(QUANTITY / float(last_price[coin]['price']))
 
+           # define the volume with the correct step size
+           if coin not in lot_size:
+               volume[coin] = float('{:.1f}'.format(volume[coin]))
+
+           else:
+               # if lot size has 0 decimal points, make the volume an integer
+                if lot_size[coin] == 0:
+                    volume[coin] = int(volume[coin])
+                else:
+                    volume[coin] = float('{:.{}f}'.format(volume[coin], lot_size[coin]))
     return volume, last_price
-
-def coin_volume_precision(coin : str, volume: float) -> float:
-    lot_size = 0
-
-    # Find the correct step size for each coin
-    # max accuracy for BTC for example is 6 decimal points
-    # while XRP is only 1
-    try:
-        step_size = session_struct['symbol_info'][coin]
-        lot_size = step_size.index('1') - 1
-    except KeyError:
-        # not retrieved at startup, try again
-        try:
-            coin_info = client.get_symbol_info(coin)
-            step_size = coin_info['filters'][2]['stepSize']
-            lot_size = step_size.index('1') - 1
-        except:
-            pass
-
-    lot_size = max(lot_size, 0)
-
-    if lot_size == 0:
-        volume = int(volume)
-    else:
-        volume = float('{:.{}f}'.format(volume, lot_size))
-
-    return volume
 
 def test_order_id() -> int:
     import random
@@ -189,10 +187,28 @@ def buy() -> Tuple[Dict, Dict, Dict]:
         # only buy if the there are no active trades on the coin
         if BUYABLE:
             print(f"{txcolors.BUY}Preparing to buy {volume[coin]} {coin}{txcolors.DEFAULT}")
+#yaka add Tue10Aug2021Gy
 
+            if OCO_MODE:
+                BUY_AMMOUT=INVESTMENT/TRADE_SLOTS
+                BUY_AMMOUT_MAX=800
+                BUY_AMMOUT=int(BUY_AMMOUT)
+                BUY_AMMOUT_CHUNK=BUY_AMMOUT
+                cwd = os.getcwd()
+                cwd2 = cwd.replace(os.sep, '/')           
+                while BUY_AMMOUT_CHUNK > BUY_AMMOUT_MAX:
+                    my_comand = "python "+cwd2+"/execute_oco_orders.py --symbol "+str(coin)+" --buy_type market --total "+str(BUY_AMMOUT_MAX)+" --profit "+str(TAKE_PROFIT)+" --loss "+str(STOP_LOSS)
+                    print(my_comand)
+                    if not TEST_MODE: os.system(f"start cmd /K {my_comand}")
+                    BUY_AMMOUT_CHUNK=BUY_AMMOUT_CHUNK-BUY_AMMOUT_MAX
+                
+                my_comand = "python "+cwd2+"/execute_oco_orders.py --symbol "+str(coin)+" --buy_type market --total "+str(BUY_AMMOUT_CHUNK)+" --profit "+str(TAKE_PROFIT)+" --loss "+str(STOP_LOSS)
+                print(my_comand)
+                if not TEST_MODE: os.system(f"start cmd /K {my_comand}")
+#yaka
             REPORT = str(f"Buy : {volume[coin]} {coin} - {last_price[coin]['price']}")
 
-            if TEST_MODE:
+            if TEST_MODE or OCO_MODE:
                 orders[coin] = [{
                     'symbol': coin,
                     'orderId': test_order_id(),
@@ -200,7 +216,8 @@ def buy() -> Tuple[Dict, Dict, Dict]:
                 }]
 
                 # Log trades
-                report_add(REPORT)
+                report_struct['report'] += REPORT
+                report_struct['log'] = True
 
                 continue
 
@@ -235,8 +252,8 @@ def buy() -> Tuple[Dict, Dict, Dict]:
                     if not TEST_MODE:
                        orders[coin] = extract_order_data(order_details)
                        REPORT = str(f"BUY: bought {orders[coin]['volume']} {coin} - average price: {orders[coin]['avgPrice']} {PAIR_WITH}")
-
-                       report_add(REPORT)
+                       report_struct['report'] += REPORT
+                       report_struct['log'] = True
 
         else:
             print(f'Signal detected, but there is already an active trade on {coin}')
@@ -289,11 +306,11 @@ def sell_coins() -> Dict:
             if DEBUG: print(f"{coin} TP reached, adjusting TP {coins_bought[coin]['take_profit']:.{decimals()}f} and SL {coins_bought[coin]['stop_loss']:.{decimals()}f} accordingly to lock-in profit")
             continue
 
-        if not TEST_MODE:
+        if not TEST_MODE and not OCO_MODE:
            current_time = float(round(time.time() * 1000))
 #           print(f'TL:{coinHoldingTimeLimit}, time: {current_time} HOLDING_TIME_LIMIT: {HOLDING_TIME_LIMIT}, TimeLeft: {(coinHoldingTimeLimit - current_time)/1000/60} ')
 
-        if TEST_MODE:
+        if TEST_MODE or OCO_MODE:
            current_time = float(round(time.time()))
 #           print(f'TL:{coinHoldingTimeLimit}, time: {current_time} HOLDING_TIME_LIMIT: {HOLDING_TIME_LIMIT}, TimeLeft: {(coinHoldingTimeLimit - current_time)/60} ')
 
@@ -305,19 +322,15 @@ def sell_coins() -> Dict:
         # check that the price is below the stop loss or above take profit (if trailing stop loss not used) and sell if this is the case
         if session_struct['sell_all_coins'] == True or lastPrice < coinStopLoss or lastPrice > coinTakeProfit and not USE_TRAILING_STOP_LOSS or holding_timeout_sell_trigger == True:
             print(f"{txcolors.SELL_PROFIT if priceChange >= 0. else txcolors.SELL_LOSS}TP or SL reached, selling {coins_bought[coin]['volume']} {coin}. Bought at: {BUY_PRICE} (Price now: {LAST_PRICE})  - {priceChange:.2f}% - Est: {(QUANTITY * priceChange) / 100:.{decimals()}f} {PAIR_WITH}{txcolors.DEFAULT}")
-            
-            # Keep lastPrice to Sell
-            lastPriceSell = lastPrice
-
             # try to create a real order
             try:
 
-                if not TEST_MODE:
+                if not TEST_MODE or OCO_MODE:
                     order_details = client.create_order(
                         symbol = coin,
                         side = 'SELL',
                         type = 'MARKET',
-                        quantity = coin_volume_precision(coin,coins_bought[coin]['volume'])
+                        quantity = coins_bought[coin]['volume']
                     )
 
             # error handling here in case position cannot be placed
@@ -326,7 +339,7 @@ def sell_coins() -> Dict:
 
             # run the else block if coin has been sold and create a dict for each coin sold
             else:
-                if not TEST_MODE:
+                if not TEST_MODE and not OCO_MODE:
 
                    coins_sold[coin] = extract_order_data(order_details)
                    lastPrice = coins_sold[coin]['avgPrice']
@@ -348,15 +361,17 @@ def sell_coins() -> Dict:
                 #gogo MOD to trigger trade lost or won and to count lost or won trades
 
                 if session_struct['sell_all_coins'] == True: REPORT =  f"PAUSE_SELL - SELL: {coins_sold[coin]['volume']} {coin} - Bought at {buyPrice:.{decimals()}f}, sold at {lastPrice:.{decimals()}f} - Profit: {trade_profit:.{decimals()}f} {PAIR_WITH} ({priceChange:.2f}%)"
-                if lastPriceSell < coinStopLoss: REPORT =  f"STOP_LOSS - SELL: {coins_sold[coin]['volume']} {coin} - Bought at {buyPrice:.{decimals()}f}, sold at {lastPrice:.{decimals()}f} - Profit: {trade_profit:.{decimals()}f} {PAIR_WITH} ({priceChange:.2f}%)"
-                if lastPriceSell > coinTakeProfit: REPORT =  f"TAKE_PROFIT - SELL: {coins_sold[coin]['volume']} {coin} - Bought at {buyPrice:.{decimals()}f}, sold at {lastPrice:.{decimals()}f} - Profit: {trade_profit:.{decimals()}f} {PAIR_WITH} ({priceChange:.2f}%)"
+                if lastPrice < coinStopLoss: REPORT =  f"STOP_LOSS - SELL: {coins_sold[coin]['volume']} {coin} - Bought at {buyPrice:.{decimals()}f}, sold at {lastPrice:.{decimals()}f} - Profit: {trade_profit:.{decimals()}f} {PAIR_WITH} ({priceChange:.2f}%)"
+                if lastPrice > coinTakeProfit: REPORT =  f"TAKE_PROFIT - SELL: {coins_sold[coin]['volume']} {coin} - Bought at {buyPrice:.{decimals()}f}, sold at {lastPrice:.{decimals()}f} - Profit: {trade_profit:.{decimals()}f} {PAIR_WITH} ({priceChange:.2f}%)"
                 if holding_timeout_sell_trigger: REPORT =  f"HOLDING_TIMEOUT - SELL: {coins_sold[coin]['volume']} {coin} - Bought at {buyPrice:.{decimals()}f}, sold at {lastPrice:.{decimals()}f} - Profit: {trade_profit:.{decimals()}f} {PAIR_WITH} ({priceChange:.2f}%)"
 
                 session_struct['session_profit'] = session_struct['session_profit'] + trade_profit
 
                 holding_timeout_sell_trigger = False
 
-                report_add(REPORT,True)
+                report_struct['report'] += REPORT
+                report_struct['message'] = True
+                report_struct['log'] = True
 
             continue
 
@@ -419,7 +434,7 @@ def update_portfolio(orders: Dict, last_price: Dict, volume: Dict) -> Dict:
     if DEBUG: print(orders)
     for coin in orders:
 
-        if not TEST_MODE:
+        if not TEST_MODE and not OCO_MODE:
            coins_bought[coin] = {
                'symbol': orders[coin]['symbol'],
                'orderid': orders[coin]['orderId'],
@@ -446,8 +461,8 @@ def update_portfolio(orders: Dict, last_price: Dict, volume: Dict) -> Dict:
         with open(coins_bought_file_path, 'w') as file:
             json.dump(coins_bought, file, indent=4)
 
-        if TEST_MODE: print(f'Order for {orders[coin][0]["symbol"]} with ID {orders[coin][0]["orderId"]} placed and saved to file.')
-        if not TEST_MODE: print(f'Order for {orders[coin]["symbol"]} with ID {orders[coin]["orderId"]} placed and saved to file.')
+        if TEST_MODE or OCO_MODE: print(f'Order for {orders[coin][0]["symbol"]} with ID {orders[coin][0]["orderId"]} placed and saved to file.')
+        if not TEST_MODE and not OCO_MODE: print(f'Order for {orders[coin]["symbol"]} with ID {orders[coin]["orderId"]} placed and saved to file.')
 
         session_struct['trade_slots'] = len(coins_bought)
 

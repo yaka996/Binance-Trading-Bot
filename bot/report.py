@@ -46,14 +46,6 @@ def discord_avatar() -> str:
         DISCORD_AVATAR =  "https://i.imgur.com/VyOdlRS.jpeg"
     return DISCORD_AVATAR
 
-def report_add(line: str, message: bool = False) -> None:
-    if report_struct['report']  != "":
-        report_struct['report'] += "\n"
-    report_struct['report'] += line
-    report_struct['log'] = True
-    if message:
-        report_struct['message'] = True
-
 def report(type: str, reportline: str) -> None:
 
     global session_struct, settings_struct, trading_struct
@@ -176,8 +168,8 @@ def report(type: str, reportline: str) -> None:
         TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_ID, TEST_DISCORD_WEBHOOK, LIVE_DISCORD_WEBHOOK = load_telegram_creds(parsed_creds)
         bot_message = SETTINGS_STRING + '\n' + reportline + '\n' + report_string + '\n'
 
-        if TEST_MODE: MODE = 'TEST'
-        if not TEST_MODE: MODE = 'MAIN'
+        if TEST_MODE or OCO_MODE: MODE = 'TEST'
+        if not TEST_MODE and not OCO_MODE: MODE = 'MAIN'
 
         BOT_SETTINGS_ID = BOT_ID + str(get_git_commit_number()) + '_' + MODE + '_' + PAIR_WITH + '_' + str(TIME_DIFFERENCE) + 'M'
 
@@ -188,7 +180,7 @@ def report(type: str, reportline: str) -> None:
             response = requests.get(send_text)
 
         if BOT_MESSAGE_REPORTS and (TEST_DISCORD_WEBHOOK or LIVE_DISCORD_WEBHOOK):
-            if not TEST_MODE:
+            if not TEST_MODE and not OCO_MODE:
                mUrl = "https://discordapp.com/api/webhooks/"+LIVE_DISCORD_WEBHOOK
             if TEST_MODE:
                mUrl = "https://discordapp.com/api/webhooks/"+TEST_DISCORD_WEBHOOK
@@ -203,9 +195,9 @@ def report(type: str, reportline: str) -> None:
         timestamp = datetime.now().strftime("%d/%m %H:%M:%S")
         # print(f'LOG_FILE: {LOG_FILE}')
         with open(LOG_FILE,'a+') as f:
-            for line in reportline.splitlines():
-              f.write(timestamp + ' ' + line + '\n')
+            f.write(timestamp + ' ' + reportline + '\n')
         report_struct['log'] = False
+        report_struct['report'] = ""
 
     session_struct['last_report_time'] = time.time()
 
