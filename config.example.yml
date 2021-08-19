@@ -2,7 +2,7 @@
 script_options:
 
   # Setting TEST_MODE to False will use REAL funds, use at your own risk!
-  TEST_MODE: False
+  TEST_MODE: True
 
   # When using OCO Mode,  keep USE_TRAILING_STOP_LOSS: False and DYNAMIC_SETTINGS: False
   # OCO order will buy at market, and use STOP_LOSS
