@@ -53,6 +53,8 @@ def tickers_list() -> None:
             time.sleep(1)
             continue
         break
+    tickers_pairwith = {}
+    tickers_new = {}
 
     if LIST_AUTOCREATE:
     # pull coins from trading view and create a list
@@ -81,15 +83,18 @@ def tickers_list() -> None:
             print(f'>> Tickers CREATED from {url} tickers!!!{TICKERS_LIST} <<')
 
         # pull coins from binance and create list
+
         if LIST_CREATE_TYPE == 'binance':
+
             with open (TICKERS_LIST, 'w') as f:
-                for ticker in tickers_binance:
-                    if ticker['symbol'].endswith(PAIR_WITH):
-                        coin = ticker['symbol'].replace(PAIR_WITH,"")
-                        if coin not in ignorelist:
-                            f.writelines(coin+'\n')
+                for ele in list_tickers_new:
+                    f.writelines(str(ele.replace(PAIR_WITH,''))+'\n')
+            session_struct['tickers_list_changed'] = True
+            print(f'>> Tickers CREATED from binance tickers!!!{TICKERS_LIST} <<')
+
             session_struct['tickers_list_changed'] = True
             print(f'>> Tickers CREATED from Binance tickers!!!{TICKERS_LIST} <<')
+
 
         # Reload Tickers
         session_struct['tickers']=[line.strip() for line in open(TICKERS_LIST)]
@@ -108,6 +113,7 @@ def tickers_list() -> None:
             tickers_sort = list(sorted( tickers_sort.items(), key=lambda x: x[1]['volume'], reverse=True))
         if SORT_LIST_TYPE == 'price_change':    
             tickers_sort = list(sorted( tickers_sort.items(), key=lambda x: x[1]['priceChangePercent'], reverse=True))
+
 
         # write sorted lists to files
         with open (TICKERS_LIST, 'w') as f:

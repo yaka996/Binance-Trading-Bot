@@ -142,6 +142,7 @@ DEBUG_SETTING = parsed_config['script_options'].get('VERBOSE_MODE')
 AMERICAN_USER = parsed_config['script_options'].get('AMERICAN_USER')
 BOT_MESSAGE_REPORTS =  parsed_config['script_options'].get('BOT_MESSAGE_REPORTS')
 BOT_ID = parsed_config['script_options'].get('BOT_ID')
+OCO_MODE = parsed_config['script_options'].get('OCO_MODE')
 
 # Load trading vars
 PAIR_WITH = parsed_config['trading_options']['PAIR_WITH']
@@ -263,7 +264,7 @@ coins_bought = {}
 coins_bought_file_path = 'coins_bought.json'
 
 # use separate files for testing and live trading
-if TEST_MODE:
+if TEST_MODE or OCO_MODE:
    coins_bought_file_path = 'test_' + coins_bought_file_path
 
 # if saved coins_bought json file exists and it's not empty then load it

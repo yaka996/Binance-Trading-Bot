@@ -21,17 +21,23 @@ class txcolors:
 
 global market_resistance
 
-INTERVAL = Interval.INTERVAL_1_MINUTE #Timeframe for analysis
+INTERVAL = Interval.INTERVAL_15_MINUTES #Timeframe for analysis
+INTERVAL2 = Interval.INTERVAL_1_MINUTE #Timeframe for analysis
+INTERVAL3 = Interval.INTERVAL_5_MINUTES #Timeframe for analysis
+INTERVAL4 = Interval.INTERVAL_1_HOUR  #Timeframe for analysis
 
 EXCHANGE = 'BINANCE'
 SCREENER = 'CRYPTO'
+
 SYMBOL = parsed_config['trading_options']['PAUSEBOTMOD_SYMBOL']
+
 TYPE = 'SELL'
 THRESHOLD = parsed_config['trading_options']['PAUSEBOTMOD_THRESHOLD'] # 7 of 15 MA's indicating sell
 TIME_TO_WAIT = parsed_config['trading_options']['TIME_DIFFERENCE'] # Minutes to wait between analysis
+TIME_TO_WAIT=TIME_TO_WAIT/5
 FULL_LOG = parsed_config['script_options']['VERBOSE_MODE'] # List analysis result to console
 
-def analyze():
+def analyze(IN_INTRVAL):
     analysis = {}
     handler = {}
 
@@ -39,7 +45,7 @@ def analyze():
         symbol = SYMBOL,
         exchange = EXCHANGE,
         screener = SCREENER,
-        interval = INTERVAL,
+        interval = IN_INTRVAL,
         timeout =  10
         )
 
@@ -53,9 +59,9 @@ def analyze():
     ma_analysis = analysis.moving_averages[TYPE]
     if ma_analysis >= THRESHOLD:
         paused = True
-        print(f'pausebotmod: {txcolors.WARNING}{SYMBOL} {txcolors.NEGATIVE}Market not looking too good, bot paused from buying {txcolors.WARNING}{ma_analysis}/{THRESHOLD} Waiting {TIME_TO_WAIT} minutes for next market checkup')
+        print(f'pausebotmod: {txcolors.WARNING}{SYMBOL} {txcolors.NEGATIVE}Market not looking too good in interval {IN_INTRVAL}, bot paused from buying {txcolors.WARNING}{ma_analysis}/{THRESHOLD} Waiting {TIME_TO_WAIT} minutes for next market checkup')
     else:
-        print(f'pausebotmod: {txcolors.WARNING}{SYMBOL} {txcolors.POSITIVE}Market looks ok, bot is running {txcolors.WARNING}{ma_analysis}/{THRESHOLD} Waiting {TIME_TO_WAIT} minutes for next market checkup ')
+        print(f'pausebotmod: {txcolors.WARNING}{SYMBOL} {txcolors.POSITIVE}Market looks ok in interval {IN_INTRVAL} , bot is running {txcolors.WARNING}{ma_analysis}/{THRESHOLD} Waiting {TIME_TO_WAIT} minutes for next market checkup ')
         paused = False
 
     return paused
@@ -66,7 +72,9 @@ def do_work():
     while True:
         if not threading.main_thread().is_alive(): exit()
         # print(f'pausebotmod: Fetching market state')
-        paused = analyze()
+        if analyze(INTERVAL) or analyze(INTERVAL3) or analyze(INTERVAL2) or analyze(INTERVAL4):
+            paused = True
+        else: paused = False
         if paused:
             with open('signals/paused.exc','a+') as f:
                 f.write('yes')
