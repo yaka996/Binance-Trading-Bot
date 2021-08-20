@@ -46,6 +46,7 @@ global trail_buy_coins
 trail_buy_coins = {}
 trail_buy_historical = {}
 
+# structure used for session variable for saving and loading
 session_struct = {
      'session_profit': 0,
      'unrealised_percent': 0,
@@ -79,7 +80,9 @@ session_struct = {
      'session_start': False,
      'prices_grabbed': False,
      'reload_tickers_list': True,
-     'profit_to_trade_ratio': 0
+     'profit_to_trade_ratio': 0,
+     'bnb_current_price': 0,
+     'tickers': []
 }
 
 report_struct = {
@@ -88,6 +91,7 @@ report_struct = {
       'log': False
 }
 
+# creating git commit number so we can use it in reports to see wich bot version is running
 def get_git_commit_number() -> str:
 
     try:
@@ -99,17 +103,17 @@ def get_git_commit_number() -> str:
     return git_commit_count
 
 def decimals() -> int:
-    # set number of decimals for reporting fractions
+# set number of decimals for reporting fractions
     if is_fiat():
         return 2
     else:
         return 8
 
 def is_fiat() -> bool:
-    # check if we are using a fiat as a base currency
+# check if we are using a fiat as a base currency
     global hsp_head
     PAIR_WITH = parsed_config['trading_options']['PAIR_WITH']
-    #list below is in the order that Binance displays them, apologies for not using ASC order but this is easier to update later
+#list below is in the order that Binance displays them, apologies for not using ASC order but this is easier to update later
     fiats = ['USDT', 'BUSD', 'AUD', 'BRL', 'EUR', 'GBP', 'RUB', 'TRY', 'TUSD', \
              'USDC', 'PAX', 'BIDR', 'DAI', 'IDRT', 'UAH', 'NGN', 'VAI', 'BVND']
 
@@ -158,6 +162,7 @@ USE_TRAILING_STOP_LOSS = parsed_config['trading_options']['USE_TRAILING_STOP_LOS
 TRAILING_STOP_LOSS = parsed_config['trading_options']['TRAILING_STOP_LOSS']
 TRAILING_TAKE_PROFIT = parsed_config['trading_options']['TRAILING_TAKE_PROFIT']
 TRADING_FEE = parsed_config['trading_options']['TRADING_FEE']
+TRADING_FEE_BNB = parsed_config['trading_options']['TRADING_FEE_BNB']
 SIGNALLING_MODULES = parsed_config['trading_options']['SIGNALLING_MODULES']
 DYNAMIC_WIN_LOSS_UP = parsed_config['trading_options']['DYNAMIC_WIN_LOSS_UP']
 DYNAMIC_WIN_LOSS_DOWN = parsed_config['trading_options']['DYNAMIC_WIN_LOSS_DOWN']
@@ -178,9 +183,9 @@ REPORT_FREQUENCY = parsed_config['script_options']['REPORT_FREQUENCY']
 HOLDING_INTERVAL_LIMIT = parsed_config['trading_options']['HOLDING_INTERVAL_LIMIT']
 QUANTITY = INVESTMENT/TRADE_SLOTS
 
-if not TEST_MODE and not OCO_MODE: HOLDING_TIME_LIMIT = (TIME_DIFFERENCE * 60 * 1000) * HOLDING_INTERVAL_LIMIT
-if TEST_MODE or OCO_MODE: HOLDING_TIME_LIMIT = (TIME_DIFFERENCE * 60) * HOLDING_INTERVAL_LIMIT
+HOLDING_TIME_LIMIT = (TIME_DIFFERENCE * 60 * 1000) * HOLDING_INTERVAL_LIMIT
 
+# structure used for settings variables and feed for bot settings
 settings_struct = {
       'TIME_DIFFERENCE': TIME_DIFFERENCE,
       'RECHECK_INTERVAL': RECHECK_INTERVAL,
@@ -197,6 +202,7 @@ settings_struct = {
       'TRAILING_BUY_THRESHOLD': TRAILING_BUY_THRESHOLD
 }
 
+# structure used for trading variables during runtime
 trading_struct = {
       'holding_timeout_dynamic': 'up',
       'holding_timeout_sell': 'none',
@@ -219,11 +225,11 @@ DEBUG = False
 
 if DEBUG_SETTING or args.debug:
     DEBUG = True
+
 # Load creds for correct environment
 access_key, secret_key = load_correct_creds(parsed_creds)
 
 # Telegram_Bot enabled? # **added by*Coding60plus
-
 if BOT_MESSAGE_REPORTS:
     TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_ID, TEST_DISCORD_WEBHOOK, LIVE_DISCORD_WEBHOOK = load_telegram_creds(parsed_creds)
 
@@ -247,12 +253,6 @@ if api_ready is not True:
 if DEBUG:
     print(f'Loaded config below\n{json.dumps(parsed_config, indent=4)}')
     print(f'Your credentials have been loaded from {creds_file}')
-
-# Load coins to be ignored from file
-ignorelist=[line.strip() for line in open(IGNORE_LIST)]
-
-# Use CUSTOM_LIST symbols if CUSTOM_LIST is set to True
-if CUSTOM_LIST: tickers=[line.strip() for line in open(TICKERS_LIST)]
 
 # prevent including a coin in volatile_coins if it has already appeared there less than TIME_DIFFERENCE minutes ago
 volatility_cooloff = {}
